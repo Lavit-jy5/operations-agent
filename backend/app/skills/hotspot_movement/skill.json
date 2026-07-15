@@ -1,0 +1,19 @@
+{
+  "slug": "hotspot_movement",
+  "name": "热点异动技能包",
+  "description": "用于国泰基金运营岗每日热点异动/热点速递文案撰写。",
+  "version": "0.2.0",
+  "default_enabled": [
+    "热点异动撰写",
+    "催化筛选",
+    "数据核验",
+    "板块规则"
+  ],
+  "skills": [
+    { "name": "热点异动撰写", "file": "01_writer.md" },
+    { "name": "催化筛选", "file": "02_catalyst_filter.md" },
+    { "name": "数据核验", "file": "03_data_verification.md" },
+    { "name": "板块规则", "file": "04_sector_rules.md" },
+    { "name": "合规检查", "file": "05_compliance_review.md" }
+  ]
+}

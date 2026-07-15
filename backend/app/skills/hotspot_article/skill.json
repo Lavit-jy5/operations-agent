@@ -1,0 +1,21 @@
+{
+  "slug": "hotspot_article",
+  "name": "热点文章技能包",
+  "description": "用于国泰基金运营岗热点解读长文撰写，覆盖标题开场、数据锚点、热点解读、后市展望、数据核验，并将产品和风险段落留空给人工填写。",
+  "version": "0.1.0",
+  "default_enabled": [
+    "标题与开场",
+    "热点解读",
+    "后市展望",
+    "数据与事实核验",
+    "产品承接"
+  ],
+  "skills": [
+    { "name": "标题与开场", "file": "01_title_opening.md" },
+    { "name": "热点解读", "file": "02_hotspot_interpretation.md" },
+    { "name": "后市展望", "file": "03_market_outlook.md" },
+    { "name": "数据与事实核验", "file": "04_data_fact_check.md" },
+    { "name": "产品承接", "file": "05_product_bridge.md" },
+    { "name": "合规与风险披露", "file": "06_compliance_risk.md" }
+  ]
+}

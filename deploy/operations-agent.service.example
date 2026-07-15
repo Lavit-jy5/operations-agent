@@ -1,0 +1,16 @@
+[Unit]
+Description=Operations Agent FastAPI Service
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/operations-agent/backend
+Environment=PATH=/opt/operations-agent/backend/.venv/bin
+ExecStart=/opt/operations-agent/backend/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
