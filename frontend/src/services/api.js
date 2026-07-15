@@ -1,12 +1,29 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
+const AUTH_TOKEN_KEY = "operations_agent_auth_token";
+
+export function getAuthToken() {
+  return window.localStorage.getItem(AUTH_TOKEN_KEY) || "";
+}
+
+export function setAuthToken(token) {
+  if (token) {
+    window.localStorage.setItem(AUTH_TOKEN_KEY, token);
+  }
+}
+
+export function clearAuthToken() {
+  window.localStorage.removeItem(AUTH_TOKEN_KEY);
+}
 
 async function request(path, options = {}) {
   let response;
   const isFormData = options.body instanceof FormData;
+  const token = getAuthToken();
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       headers: {
         ...(isFormData ? {} : { "Content-Type": "application/json" }),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(options.headers || {}),
       },
       ...options,
@@ -17,6 +34,9 @@ async function request(path, options = {}) {
 
   if (!response.ok) {
     const message = await response.text();
+    if (response.status === 401) {
+      clearAuthToken();
+    }
     throw new Error(message || `请求失败：${response.status}`);
   }
 
@@ -25,6 +45,17 @@ async function request(path, options = {}) {
 
 export function getHealth() {
   return request("/health");
+}
+
+export function loginWithPassword(password) {
+  return request("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ password }),
+  });
+}
+
+export function verifyAuth() {
+  return request("/auth/verify");
 }
 
 export function queryWind(payload) {

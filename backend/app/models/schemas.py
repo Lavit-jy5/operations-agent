@@ -11,6 +11,16 @@ class HealthResponse(BaseModel):
     checked_at: datetime
 
 
+class AuthLoginRequest(BaseModel):
+    password: str
+
+
+class AuthStatusResponse(BaseModel):
+    authenticated: bool
+    enabled: bool
+    token: str = ""
+
+
 class WindQueryRequest(BaseModel):
     symbols: list[str] = Field(default_factory=list)
     indicators: list[str] = Field(default_factory=list)

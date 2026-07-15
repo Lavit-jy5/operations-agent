@@ -34,6 +34,35 @@ button {
   cursor: pointer;
 }
 
+.authPage {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 24px;
+  background: linear-gradient(135deg, #eef4f8 0%, #f8fafc 100%);
+}
+
+.authCard {
+  display: grid;
+  gap: 14px;
+  width: min(420px, 100%);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 28px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.authCard h1 {
+  font-size: 24px;
+}
+
+.authCard p {
+  margin-bottom: 0;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
 .shell {
   display: grid;
   grid-template-columns: 260px 1fr;

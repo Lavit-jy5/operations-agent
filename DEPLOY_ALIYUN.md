@@ -64,6 +64,9 @@ cp .env.example .env
 APP_NAME=运营智能体 API
 APP_ENV=production
 FRONTEND_ORIGIN=http://你的服务器公网IP
+APP_ACCESS_PASSWORD=设置一个访问密码
+APP_AUTH_SECRET=设置一串更长的随机密钥
+APP_AUTH_TOKEN_TTL_SECONDS=604800
 
 WIND_API_MODE=mock
 
@@ -76,6 +79,8 @@ LLM_TIMEOUT_SECONDS=180
 ```
 
 注意：真实 API Key 只写在服务器 `.env`，不要提交到代码，也不要放前端。
+`APP_ACCESS_PASSWORD` 是打开网页时输入的访问密码，建议不要和服务器密码、GitHub 密码相同。
+`APP_AUTH_SECRET` 用于签发登录 token，可以随便设置一串较长随机字符。
 
 先手动验证后端：
 
