@@ -103,6 +103,8 @@ curl http://127.0.0.1:8000/api/health
 
 ```bash
 sudo cp /opt/operations-agent/deploy/operations-agent.service.example /etc/systemd/system/operations-agent.service
+sudo mkdir -p /opt/operations-agent/backend/storage
+sudo chown -R www-data:www-data /opt/operations-agent/backend/storage
 sudo chown -R www-data:www-data /opt/operations-agent
 sudo systemctl daemon-reload
 sudo systemctl enable operations-agent

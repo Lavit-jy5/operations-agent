@@ -27,20 +27,26 @@ def _connect() -> sqlite3.Connection:
 
 def add_log(log_type: str, summary: str, status: str = "success") -> str:
     log_id = str(uuid4())
-    with _connect() as conn:
-        conn.execute(
-            "INSERT INTO logs (id, type, created_at, summary, status) VALUES (?, ?, ?, ?, ?)",
-            (log_id, log_type, datetime.now().isoformat(), summary, status),
-        )
+    try:
+        with _connect() as conn:
+            conn.execute(
+                "INSERT INTO logs (id, type, created_at, summary, status) VALUES (?, ?, ?, ?, ?)",
+                (log_id, log_type, datetime.now().isoformat(), summary, status),
+            )
+    except OSError:
+        return log_id
     return log_id
 
 
 def list_logs(limit: int = 50) -> list[LogItem]:
-    with _connect() as conn:
-        rows = conn.execute(
-            "SELECT id, type, created_at, summary, status FROM logs ORDER BY created_at DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
+    try:
+        with _connect() as conn:
+            rows = conn.execute(
+                "SELECT id, type, created_at, summary, status FROM logs ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+    except OSError:
+        return []
 
     return [
         LogItem(
@@ -52,4 +58,3 @@ def list_logs(limit: int = 50) -> list[LogItem]:
         )
         for row in rows
     ]
-
