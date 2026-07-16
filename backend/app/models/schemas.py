@@ -126,6 +126,56 @@ class BriefGenerateResponse(BaseModel):
     review_issues: list[ValidationIssue]
 
 
+class GeneratedContentRequest(BaseModel):
+    brief_type: Literal["热点异动", "热点文章"] = "热点异动"
+    title: str = ""
+    summary: str = ""
+    body: str = ""
+    risk_notice: str = ""
+    citations: list[str] = Field(default_factory=list)
+    quality_score: int = 0
+    review_issues: list[ValidationIssue] = Field(default_factory=list)
+    material_text: str = ""
+    vision_text: str = ""
+    document_text: str = ""
+    source_data: list[WindDataPoint] = Field(default_factory=list)
+
+
+class QualityCheckResponse(BaseModel):
+    quality_score: int
+    review_issues: list[ValidationIssue]
+
+
+class TitleCandidatesRequest(BaseModel):
+    brief_type: Literal["热点异动", "热点文章"] = "热点文章"
+    topic: str = ""
+    title_hint: str = ""
+    title_prompt: str = ""
+    summary: str = ""
+    body: str = ""
+    material_text: str = ""
+    count: int = 8
+
+
+class TitleCandidatesResponse(BaseModel):
+    titles: list[str]
+    used_model: bool
+    issues: list[str] = Field(default_factory=list)
+
+
+class GenerationItem(BaseModel):
+    id: str
+    created_at: datetime
+    brief_type: Literal["热点异动", "热点文章"]
+    title: str
+    summary: str = ""
+    body: str = ""
+    risk_notice: str = ""
+    citations: list[str] = Field(default_factory=list)
+    quality_score: int = 0
+    review_issues: list[ValidationIssue] = Field(default_factory=list)
+
+
 class LogItem(BaseModel):
     id: str
     type: Literal["wind_query", "brief_generate", "validation"]

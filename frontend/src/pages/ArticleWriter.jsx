@@ -1,5 +1,12 @@
 import { useMemo, useState } from "react";
-import { extractMaterials, extractVisionMaterials, generateBrief } from "../services/api";
+import {
+  exportBriefDocx,
+  extractMaterials,
+  extractVisionMaterials,
+  generateBrief,
+  generateTitleCandidates,
+  qualityCheck,
+} from "../services/api";
 
 const ARTICLE_PROMPT_TEMPLATE = `你要生成一篇基金运营热点文章，参考既有样稿风格：先问候并说明作者，再进入核心内容，正文包含【热点解读】、【后市展望】、【相关产品】和【风险提示】。
 
@@ -52,6 +59,16 @@ export default function ArticleWriter({ settings, skills, onOpenSkills }) {
   const [activeTab, setActiveTab] = useState("body");
   const [article, setArticle] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [titleLoading, setTitleLoading] = useState(false);
+  const [titleCandidates, setTitleCandidates] = useState([]);
+  const [sourceContext, setSourceContext] = useState({
+    materialText: "",
+    visionText: "",
+    documentText: "",
+    sourceData: [],
+  });
   const [progressMessage, setProgressMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -109,6 +126,13 @@ export default function ArticleWriter({ settings, skills, onOpenSkills }) {
     try {
       const backgroundMaterials = await collectBackgroundMaterials();
       const activeImageUsages = buildImageUsagePayload(imageFiles, imageUsages);
+      const nextSourceContext = {
+        materialText: materials,
+        visionText: backgroundMaterials.visionText || "",
+        documentText: backgroundMaterials.documentText || "",
+        sourceData: [],
+      };
+      setSourceContext(nextSourceContext);
       setProgressMessage("正在生成文章正文...");
       const result = await generateBrief({
         title_hint: topic || shortRequest.slice(0, 36),
@@ -130,8 +154,11 @@ export default function ArticleWriter({ settings, skills, onOpenSkills }) {
         data: [],
         extra_context: "运营智能体热点文章工作台：轻量输入模式，主题可为黄金、半导体、创新药等短主题，材料集中在一个输入框中。",
       });
+      setProgressMessage("正在执行 12 项质检...");
+      const qualityResult = await qualityCheck(toGeneratedContentPayload(result, "热点文章", nextSourceContext));
       setProgressMessage("生成完成，正在展示结果。");
-      setArticle(result);
+      setArticle({ ...result, ...qualityResult });
+      setTitleCandidates([]);
       setActiveTab("body");
     } catch (err) {
       setError(err.message);
@@ -139,6 +166,68 @@ export default function ArticleWriter({ settings, skills, onOpenSkills }) {
       setLoading(false);
       setProgressMessage("");
     }
+  }
+
+  async function handleQualityCheck() {
+    if (!article) {
+      return;
+    }
+    setChecking(true);
+    setError("");
+    try {
+      const result = await qualityCheck(toGeneratedContentPayload(article, "热点文章", sourceContext));
+      setArticle((current) => ({ ...current, ...result }));
+      setActiveTab("review");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  async function handleTitleCandidates() {
+    setTitleLoading(true);
+    setError("");
+    try {
+      const result = await generateTitleCandidates({
+        brief_type: "热点文章",
+        topic,
+        title_hint: article?.title || topic || shortRequest,
+        title_prompt: activeTitlePrompt,
+        summary: article?.summary || "",
+        body: article?.body || "",
+        material_text: [shortRequest, materials].filter(Boolean).join("\n\n"),
+        count: 8,
+      });
+      setTitleCandidates(result.titles || []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setTitleLoading(false);
+    }
+  }
+
+  async function handleExportDocx() {
+    if (!article) {
+      return;
+    }
+    setExporting(true);
+    setError("");
+    try {
+      await downloadDocx(toGeneratedContentPayload(article, "热点文章", sourceContext));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  function applyTitle(title) {
+    setArticle((current) => (current ? { ...current, title } : current));
+    if (!article) {
+      setTopic(title);
+    }
+    setActiveTab("body");
   }
 
   async function collectBackgroundMaterials() {
@@ -306,11 +395,28 @@ export default function ArticleWriter({ settings, skills, onOpenSkills }) {
             <p className="eyebrow">文章工作台</p>
             <h2>{article?.title || (topic ? `${topic}热点文章` : "待生成文章")}</h2>
           </div>
-          <div className="articleMetaPills">
-            <span>{formatArticleAuthor(author) || "未填写作者"}</span>
-            <span>{wordCount || "未设置"} 字</span>
+          <div className="outputHeaderSide">
+            <div className="articleMetaPills">
+              <span>{formatArticleAuthor(author) || "未填写作者"}</span>
+              <span>{wordCount || "未设置"} 字</span>
+            </div>
+            <div className="resultActionRow">
+              <button className="ghostBtn" onClick={handleTitleCandidates} disabled={titleLoading}>
+                {titleLoading ? "生成中..." : "标题候选"}
+              </button>
+              <button className="ghostBtn" onClick={handleQualityCheck} disabled={!article || checking}>
+                {checking ? "质检中..." : "重新质检"}
+              </button>
+              <button className="ghostBtn" onClick={handleExportDocx} disabled={!article || exporting}>
+                {exporting ? "导出中..." : "导出 Word"}
+              </button>
+            </div>
           </div>
         </div>
+
+        {titleCandidates.length > 0 && (
+          <TitleCandidatePanel titles={titleCandidates} activeTitle={article?.title} onSelect={applyTitle} />
+        )}
 
         <div className="tabs">
           {TABS.map((tab) => (
@@ -329,6 +435,29 @@ export default function ArticleWriter({ settings, skills, onOpenSkills }) {
         {activeTab === "citations" && <ArticleCitations article={article} />}
         {activeTab === "review" && <ArticleReview article={article} />}
       </section>
+    </div>
+  );
+}
+
+function TitleCandidatePanel({ titles, activeTitle, onSelect }) {
+  return (
+    <div className="titleCandidatePanel">
+      <div>
+        <strong>标题候选</strong>
+        <span>点击任一标题即可替换当前标题</span>
+      </div>
+      <div className="titleCandidateList">
+        {titles.map((title) => (
+          <button
+            className={title === activeTitle ? "selected" : ""}
+            key={title}
+            type="button"
+            onClick={() => onSelect(title)}
+          >
+            {title}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -423,13 +552,39 @@ function ArticleReview({ article }) {
         <strong>{article.quality_score}</strong>
         <span>可发布度</span>
       </div>
-      <div className="issueBox">
-        {article.review_issues.length ? article.review_issues.map((issue, index) => (
-          <p key={index}>{issue.level} · {issue.message}</p>
-        )) : <p>未发现明显质检问题。</p>}
-      </div>
+      <QualityIssueList issues={article.review_issues} />
     </div>
   );
+}
+
+function QualityIssueList({ issues }) {
+  if (!issues.length) {
+    return <div className="issueBox"><p>未发现明显质检问题。</p></div>;
+  }
+
+  return (
+    <div className="qualityRuleList">
+      {issues.map((issue, index) => (
+        <div className={`qualityRuleCard ${issue.level}`} key={`${issue.field}-${index}`}>
+          <div className="qualityRuleHeader">
+            <strong>{issue.field || `规则 ${index + 1}`}</strong>
+            <span>{levelLabel(issue.level)}</span>
+          </div>
+          <p>{issue.message}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function levelLabel(level) {
+  if (level === "error") {
+    return "未通过";
+  }
+  if (level === "warning") {
+    return "提醒";
+  }
+  return "通过";
 }
 
 function FileList({ files, emptyText, onRemove }) {
@@ -548,4 +703,33 @@ function formatArticleAuthor(value = "") {
     return "待补充";
   }
   return cleanValue.startsWith("国泰基金") ? cleanValue : `国泰基金${cleanValue}`;
+}
+
+function toGeneratedContentPayload(content, briefType, sourceContext = {}) {
+  return {
+    brief_type: briefType,
+    title: content.title || "",
+    summary: content.summary || "",
+    body: content.body || "",
+    risk_notice: content.risk_notice || "",
+    citations: content.citations || [],
+    quality_score: content.quality_score || 0,
+    review_issues: content.review_issues || [],
+    material_text: sourceContext.materialText || "",
+    vision_text: sourceContext.visionText || "",
+    document_text: sourceContext.documentText || "",
+    source_data: sourceContext.sourceData || [],
+  };
+}
+
+async function downloadDocx(payload) {
+  const { blob, filename } = await exportBriefDocx(payload);
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }

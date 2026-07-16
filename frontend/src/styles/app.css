@@ -434,6 +434,77 @@ th {
   line-height: 1.6;
 }
 
+.qualityRuleList {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.qualityRuleCard {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  background: #fff;
+}
+
+.qualityRuleCard.info {
+  border-color: #cfe7dc;
+  background: #f6fbf8;
+}
+
+.qualityRuleCard.warning {
+  border-color: #f0dca8;
+  background: #fffaf0;
+}
+
+.qualityRuleCard.error {
+  border-color: #f2c2bc;
+  background: #fff6f4;
+}
+
+.qualityRuleHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.qualityRuleHeader strong {
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.qualityRuleHeader span {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px 8px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.qualityRuleCard.info .qualityRuleHeader span {
+  color: #26745e;
+}
+
+.qualityRuleCard.warning .qualityRuleHeader span {
+  color: #8a6418;
+}
+
+.qualityRuleCard.error .qualityRuleHeader span {
+  color: #a13a2e;
+}
+
+.qualityRuleCard p {
+  margin-bottom: 0;
+  color: #394957;
+  line-height: 1.75;
+  white-space: pre-line;
+}
+
 .document {
   min-height: 620px;
 }
@@ -1111,6 +1182,69 @@ th {
   background: #fbfcfd;
   color: var(--muted);
   font-size: 12px;
+}
+
+.outputHeaderSide {
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+}
+
+.resultActionRow {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.resultActionRow .ghostBtn {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.titleCandidatePanel {
+  display: grid;
+  gap: 12px;
+  margin: -4px 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  background: #fbfcfd;
+}
+
+.titleCandidatePanel > div:first-child {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.titleCandidatePanel span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.titleCandidateList {
+  display: grid;
+  gap: 8px;
+}
+
+.titleCandidateList button {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fff;
+  color: var(--text);
+  text-align: left;
+  line-height: 1.5;
+}
+
+.titleCandidateList button:hover,
+.titleCandidateList button.selected {
+  border-color: #9fc4ff;
+  background: #f4f8ff;
 }
 
 .articleEmptyState {

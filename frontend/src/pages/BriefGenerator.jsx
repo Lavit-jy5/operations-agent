@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { expandPrompt, extractMaterials, extractVisionMaterials, generateBrief } from "../services/api";
+import {
+  expandPrompt,
+  exportBriefDocx,
+  extractMaterials,
+  extractVisionMaterials,
+  generateBrief,
+  generateTitleCandidates,
+  qualityCheck,
+} from "../services/api";
 import { BRIEF_TYPES } from "./TemplateSettings";
 
 const USER_PROMPT_TEMPLATE = `【今日日期】：
@@ -46,6 +54,16 @@ export default function BriefGenerator({
   const [outputMode, setOutputMode] = useState("prompt");
   const [editingResult, setEditingResult] = useState(false);
   const [draftBrief, setDraftBrief] = useState(null);
+  const [checking, setChecking] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [titleLoading, setTitleLoading] = useState(false);
+  const [titleCandidates, setTitleCandidates] = useState([]);
+  const [sourceContext, setSourceContext] = useState({
+    materialText: "",
+    visionText: "",
+    documentText: "",
+    sourceData: [],
+  });
 
   const selectedMode = useMemo(() => BRIEF_TYPES.find((mode) => mode.id === briefType), [briefType]);
   const length = Number(wordCount) <= 500 ? "短" : Number(wordCount) >= 1200 ? "长" : "中";
@@ -105,6 +123,13 @@ export default function BriefGenerator({
 
     try {
       const backgroundMaterials = await collectBackgroundMaterials();
+      const nextSourceContext = {
+        materialText,
+        visionText: backgroundMaterials.visionText || "",
+        documentText: backgroundMaterials.documentText || "",
+        sourceData: latestData?.data || [],
+      };
+      setSourceContext(nextSourceContext);
       const result = await generateBrief({
         title_hint: userPrompt.slice(0, 36),
         title_prompt: activeTitlePrompt,
@@ -124,9 +149,12 @@ export default function BriefGenerator({
         data: latestData?.data || [],
         extra_context: "运营智能体热点异动工作台：提示词先在右侧预览，正式生成后覆盖为热点异动结果。",
       });
-      setDraftBrief(result);
+      const qualityResult = await qualityCheck(toGeneratedContentPayload(result, briefType, nextSourceContext));
+      const nextBrief = { ...result, ...qualityResult };
+      setDraftBrief(nextBrief);
+      setTitleCandidates([]);
       setOutputMode("result");
-      onBrief(result);
+      onBrief(nextBrief);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -166,6 +194,68 @@ export default function BriefGenerator({
   function saveEditedBrief() {
     onBrief(draftBrief);
     setEditingResult(false);
+  }
+
+  async function handleQualityCheck() {
+    if (!draftBrief) {
+      return;
+    }
+    setChecking(true);
+    setError("");
+    try {
+      const result = await qualityCheck(toGeneratedContentPayload(draftBrief, briefType, sourceContext));
+      const next = { ...draftBrief, ...result };
+      setDraftBrief(next);
+      onBrief(next);
+      setOutputMode("result");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  async function handleTitleCandidates() {
+    setTitleLoading(true);
+    setError("");
+    try {
+      const result = await generateTitleCandidates({
+        brief_type: briefType,
+        topic: shortRequest,
+        title_hint: draftBrief?.title || userPrompt.slice(0, 36),
+        title_prompt: activeTitlePrompt,
+        summary: draftBrief?.summary || "",
+        body: draftBrief?.body || userPrompt,
+        material_text: materialText,
+        count: 8,
+      });
+      setTitleCandidates(result.titles || []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setTitleLoading(false);
+    }
+  }
+
+  async function handleExportDocx() {
+    if (!draftBrief) {
+      return;
+    }
+    setExporting(true);
+    setError("");
+    try {
+      await downloadDocx(toGeneratedContentPayload(draftBrief, briefType, sourceContext));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  function applyTitle(title) {
+    setDraftBrief((current) => (current ? { ...current, title } : current));
+    onBrief(draftBrief ? { ...draftBrief, title } : draftBrief);
+    setOutputMode("result");
   }
 
   return (
@@ -284,11 +374,28 @@ export default function BriefGenerator({
             <p className="eyebrow">工作台</p>
             <h2>{outputMode === "result" && draftBrief ? draftBrief.title : "提示词预览"}</h2>
           </div>
-          <div className="articleMetaPills">
-            <span>{selectedMode?.id || "热点异动"}</span>
-            <span>{wordCount || "未设置"} 字</span>
+          <div className="outputHeaderSide">
+            <div className="articleMetaPills">
+              <span>{selectedMode?.id || "热点异动"}</span>
+              <span>{wordCount || "未设置"} 字</span>
+            </div>
+            <div className="resultActionRow">
+              <button className="ghostBtn" onClick={handleTitleCandidates} disabled={titleLoading}>
+                {titleLoading ? "生成中..." : "标题候选"}
+              </button>
+              <button className="ghostBtn" onClick={handleQualityCheck} disabled={!draftBrief || checking}>
+                {checking ? "质检中..." : "重新质检"}
+              </button>
+              <button className="ghostBtn" onClick={handleExportDocx} disabled={!draftBrief || exporting}>
+                {exporting ? "导出中..." : "导出 Word"}
+              </button>
+            </div>
           </div>
         </div>
+
+        {titleCandidates.length > 0 && (
+          <TitleCandidatePanel titles={titleCandidates} activeTitle={draftBrief?.title} onSelect={applyTitle} />
+        )}
 
         {outputMode === "prompt" && (
           <PromptWorkspace
@@ -313,6 +420,29 @@ export default function BriefGenerator({
           />
         )}
       </section>
+    </div>
+  );
+}
+
+function TitleCandidatePanel({ titles, activeTitle, onSelect }) {
+  return (
+    <div className="titleCandidatePanel">
+      <div>
+        <strong>标题候选</strong>
+        <span>点击任一标题即可替换当前标题</span>
+      </div>
+      <div className="titleCandidateList">
+        {titles.map((title) => (
+          <button
+            className={title === activeTitle ? "selected" : ""}
+            key={title}
+            type="button"
+            onClick={() => onSelect(title)}
+          >
+            {title}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -381,13 +511,39 @@ function ResultWorkspace({ brief, editing, onEdit, onCancel, onSave, onChange })
         <strong>{brief.quality_score}</strong>
         <span>可发布度</span>
       </div>
-      <div className="issueBox">
-        {brief.review_issues.length ? brief.review_issues.map((issue, index) => (
-          <p key={index}>{issue.level} · {issue.message}</p>
-        )) : <p>未发现明显质检问题。</p>}
-      </div>
+      <QualityIssueList issues={brief.review_issues} />
     </article>
   );
+}
+
+function QualityIssueList({ issues }) {
+  if (!issues.length) {
+    return <div className="issueBox"><p>未发现明显质检问题。</p></div>;
+  }
+
+  return (
+    <div className="qualityRuleList">
+      {issues.map((issue, index) => (
+        <div className={`qualityRuleCard ${issue.level}`} key={`${issue.field}-${index}`}>
+          <div className="qualityRuleHeader">
+            <strong>{issue.field || `规则 ${index + 1}`}</strong>
+            <span>{levelLabel(issue.level)}</span>
+          </div>
+          <p>{issue.message}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function levelLabel(level) {
+  if (level === "error") {
+    return "未通过";
+  }
+  if (level === "warning") {
+    return "提醒";
+  }
+  return "通过";
 }
 
 function FileList({ files, emptyText, onRemove }) {
@@ -417,4 +573,33 @@ function getFileKey(file) {
 function mergeFiles(current, selected) {
   const existing = new Set(current.map(getFileKey));
   return [...current, ...selected.filter((file) => !existing.has(getFileKey(file)))];
+}
+
+function toGeneratedContentPayload(content, briefType, sourceContext = {}) {
+  return {
+    brief_type: briefType,
+    title: content.title || "",
+    summary: content.summary || "",
+    body: content.body || "",
+    risk_notice: content.risk_notice || "",
+    citations: content.citations || [],
+    quality_score: content.quality_score || 0,
+    review_issues: content.review_issues || [],
+    material_text: sourceContext.materialText || "",
+    vision_text: sourceContext.visionText || "",
+    document_text: sourceContext.documentText || "",
+    source_data: sourceContext.sourceData || [],
+  };
+}
+
+async function downloadDocx(payload) {
+  const { blob, filename } = await exportBriefDocx(payload);
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }

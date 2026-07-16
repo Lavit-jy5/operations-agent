@@ -72,6 +72,53 @@ export function generateBrief(payload) {
   });
 }
 
+export function qualityCheck(payload) {
+  return request("/brief/quality-check", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function generateTitleCandidates(payload) {
+  return request("/brief/title-candidates", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function exportBriefDocx(payload) {
+  const token = getAuthToken();
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}/brief/export-docx`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    throw new Error(`无法连接后端服务：${API_BASE_URL}。请确认后端已启动。`);
+  }
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || `导出失败：${response.status}`);
+  }
+
+  const disposition = response.headers.get("content-disposition") || "";
+  const filenameMatch = disposition.match(/filename\*=UTF-8''([^;]+)/);
+  return {
+    blob: await response.blob(),
+    filename: filenameMatch ? decodeURIComponent(filenameMatch[1]) : "运营内容草稿.docx",
+  };
+}
+
+export function getGenerations() {
+  return request("/generations");
+}
+
 export function extractMaterials(files) {
   const formData = new FormData();
   files.forEach((file) => formData.append("files", file));

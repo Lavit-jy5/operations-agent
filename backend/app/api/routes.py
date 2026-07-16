@@ -1,7 +1,9 @@
 import json
 from datetime import datetime
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
+from fastapi.responses import Response
 
 from app.core.config import settings
 from app.models.schemas import (
@@ -9,11 +11,16 @@ from app.models.schemas import (
     AuthStatusResponse,
     BriefGenerateRequest,
     BriefGenerateResponse,
+    GeneratedContentRequest,
+    GenerationItem,
     HealthResponse,
     LogItem,
     MaterialExtractResponse,
     PromptExpandRequest,
     PromptExpandResponse,
+    QualityCheckResponse,
+    TitleCandidatesRequest,
+    TitleCandidatesResponse,
     ValidateRequest,
     ValidateResponse,
     VisionExtractResponse,
@@ -21,10 +28,12 @@ from app.models.schemas import (
     WindQueryResponse,
 )
 from app.services.auth_service import auth_enabled, create_auth_token, password_matches, verify_auth_token
+from app.services.content_tools_service import build_docx, generate_title_candidates, quality_check
 from app.services.llm_service import generate_brief
 from app.services.log_service import add_log, list_logs
 from app.services.material_service import extract_materials
 from app.services.prompt_service import expand_prompt
+from app.services.storage_service import list_generations, save_generation
 from app.services.validation_service import validate_wind_data
 from app.services.vision_service import extract_vision_materials
 from app.services.wind_service import query_wind
@@ -94,8 +103,37 @@ def data_validate(request: ValidateRequest, _: None = Depends(require_auth)) -> 
 @router.post("/brief/generate", response_model=BriefGenerateResponse)
 def brief_generate(request: BriefGenerateRequest, _: None = Depends(require_auth)) -> BriefGenerateResponse:
     response = generate_brief(request)
+    try:
+        save_generation(request, response)
+    except OSError:
+        pass
     add_log("brief_generate", f"生成《{response.title}》")
     return response
+
+
+@router.post("/brief/quality-check", response_model=QualityCheckResponse)
+def brief_quality_check(request: GeneratedContentRequest, _: None = Depends(require_auth)) -> QualityCheckResponse:
+    response = quality_check(request)
+    add_log("validation", f"质检《{request.title or '未命名内容'}》，评分 {response.quality_score}")
+    return response
+
+
+@router.post("/brief/title-candidates", response_model=TitleCandidatesResponse)
+def brief_title_candidates(request: TitleCandidatesRequest, _: None = Depends(require_auth)) -> TitleCandidatesResponse:
+    response = generate_title_candidates(request)
+    add_log("validation", f"生成 {len(response.titles)} 个标题候选")
+    return response
+
+
+@router.post("/brief/export-docx")
+def brief_export_docx(request: GeneratedContentRequest, _: None = Depends(require_auth)) -> Response:
+    content = build_docx(request)
+    safe_title = quote((request.title or "运营内容草稿")[:80])
+    return Response(
+        content,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{safe_title}.docx"},
+    )
 
 
 @router.post("/materials/extract", response_model=MaterialExtractResponse)
@@ -140,3 +178,11 @@ def prompt_expand(request: PromptExpandRequest, _: None = Depends(require_auth))
 @router.get("/logs", response_model=list[LogItem])
 def logs(_: None = Depends(require_auth)) -> list[LogItem]:
     return list_logs()
+
+
+@router.get("/generations", response_model=list[GenerationItem])
+def generations(_: None = Depends(require_auth)) -> list[GenerationItem]:
+    try:
+        return list_generations()
+    except OSError:
+        return []
